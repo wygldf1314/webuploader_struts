@@ -53,5 +53,30 @@
                     log('Flash: md5 ' + file.name + ' cost ' + (end - start) + 'ms get value: ' + ret);
                 });
         });
+        
+        WebUploader.create({
+          pick: '#uploadFile',
+          server: 'testImageUpload.action',
+      }).on('fileQueued', function( file ) {
+          var start =  +new Date();
+
+          // 返回的是 promise 对象
+          this.md5File(file, 0, 1 * 1024)
+
+              // 可以用来监听进度
+              .progress(function(percentage) {
+                  // console.log('Percentage:', percentage);
+              })
+
+              // 处理完成后触发
+              .then(function(ret) {
+                  // console.log('md5:', ret);
+                 
+                  var end = +new Date();
+                  log('Html5: md5 ' + file.name + ' cost ' + (end - start) + 'ms get value: ' + ret);
+              });
+      });
+        
+        
     });
 })(jQuery);

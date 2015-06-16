@@ -34,6 +34,12 @@
         </action>
         <action name="uploadImage" class="wanpeng.action.WebuploadAction" method="uploadImage">
         </action>
+        <action name="chunkUpload" class="wanpeng.action.WebuploadAction" method="chunkUpload">
+        </action>
+        <action name="brokeUpload" class="wanpeng.action.BrokeUploadAction" method="brokeUpload">
+        </action>
+        <action name="whetherBrokeUpload" class="wanpeng.action.BrokeUploadAction" method="whetherBrokeUpload">
+        </action>
     </package>
 
 </struts>

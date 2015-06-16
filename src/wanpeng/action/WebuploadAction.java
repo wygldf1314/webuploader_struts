@@ -22,7 +22,10 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.struts2.ServletActionContext;
 
 import sun.misc.BASE64Encoder;
@@ -335,6 +338,29 @@ public class WebuploadAction extends ActionSupport {
         return dir.delete();
     }
 
+    /**
+     * 处理分块的文件
+     */
+    public void chunkUpload(HttpServletRequest request, HttpServletResponse response) {
+        String chunkFileName;
+        String fileMd5 = request.getParameter("fileMd5");
+        Long fileSize = Long.parseLong(request.getParameter("size"));
+        String fileName = request.getParameter("name");
+        Integer fileType = Integer.parseInt(request.getParameter("fileType"));
+        Integer isShared = Integer.parseInt(request.getParameter("isShared"));
+        Integer chunks = 0, chunk = 0;
+        String chunkStr = request.getParameter("chunk");
+        String chunksStr = request.getParameter("chunks");
+        String chunkMd5 = request.getParameter("chunkMd5");
+        if (StringUtils.isEmpty(fileMd5)) {
+            chunkFileName = fileName + fileSize;
+        }
+        else {
+            chunkFileName = fileMd5;
+        }
+    }
+
+    /************************* getter setter method **************************/
     public File getUploadFile() {
         return uploadFile;
     }

@@ -10,9 +10,22 @@
         <div class="uploader-container">
             <div id="filePicker">html5版本</div>
             <div id="filePicker2">flash版本</div>
+            <div id="uploadFile">上传文件</div>
         </div>
         <div id="log">
             <strong>console 会影响 md5 时间的计算，所以在测试 md5 速度的时候，把 console 关了</strong>
+        </div>
+        <div id="uploader">
+	        <div class="statusBar" style="display:none;">
+	            <div class="progress">
+	                <span class="text">0%</span>
+	                <span class="percentage"></span>
+	            </div>
+	            <div class="info"></div>
+	            <div class="btns">
+	                <div id="filePicker2"></div><div class="uploadBtn">开始上传</div>
+	            </div>
+	        </div>
         </div>
     </div>
     <script type="text/javascript" src="../image-upload/jquery.js"></script>
