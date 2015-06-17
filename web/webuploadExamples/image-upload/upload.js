@@ -154,7 +154,6 @@
             chunkSize: 10240,//10k
             compress: false,
             // 是否保留头部meta信息。
-            preserveHeaders: true,
             server: 'testImageUpload.action',
             // runtimeOrder: 'flash',
             // server: 'http://liaoxuezhi.fe.baidu.com/webupload/fileupload.php',
@@ -169,6 +168,8 @@
 
             // 禁掉全局的拖拽功能。这样不会出现图片拖进页面的时候，把图片打开。
             disableGlobalDnd: true,
+            resize: false,
+            threads:1,
             fileNumLimit: 300,
             fileSizeLimit: 200 * 1024 * 1024 * 1024,    // 200 G
             fileSingleSizeLimit: 20 * 1024 * 1024 * 1024    // 20G

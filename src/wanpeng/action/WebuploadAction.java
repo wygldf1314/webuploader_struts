@@ -317,6 +317,18 @@ public class WebuploadAction extends ActionSupport {
             }
         }
         eachFileOutput.close();
+        ips.close();
+        String propertyPath = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + "property";
+        String codePath = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + "code";
+
+        if (new File(propertyPath).exists()) {
+            deleteFile(new File(propertyPath));
+        }
+
+        if (new File(codePath).exists()) {
+            deleteFile(new File(codePath));
+        }
+
         System.out.println("uploadImage success");
     }
 
