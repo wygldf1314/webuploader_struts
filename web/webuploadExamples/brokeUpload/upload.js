@@ -1,5 +1,5 @@
-            var userInfo = {userId:"kazaff", md5:""};   //用户会话信息
-            var chunkSize = 10 * 1024;        //分块大小
+ var userInfo = {userId:"kazaff", md5:""};   //用户会话信息
+            var chunkSize = 5000 * 1024;        //分块大小
             var uniqueFileName = null;          //文件唯一标识符
             var md5Mark = null;
 
@@ -7,17 +7,17 @@
                 switch(type){
                     case "php": return "./serverPHP/fileUpload.php"
                     case "node": return "http://localhost:3000/fileUpload";
-                    case "java": return "brokeUpload.action";
+                    case "java": return "http://localhost:8080/fileUpload";
                     case "dubbo": return "http://127.0.0.1:8888/fileUpload";
                 }
             }
 
-            var backEndUrl = getServer("java");
+            var backEndUrl = getServer("dubbo");
 
             WebUploader.Uploader.register({
-                "before-send-file": "beforeSendFile",
-                "before-send": "beforeSend",
-                "after-send-file": "afterSendFile"
+                "before-send-file": "beforeSendFile"
+                , "before-send": "beforeSend"
+                , "after-send-file": "afterSendFile"
             }, {
                 beforeSendFile: function(file){
                     //秒传验证
@@ -32,15 +32,15 @@
                         userInfo.md5 = val;
 
                         $.ajax({
-                            type: "POST",
-                            url: backEndUrl,
-                            data: {
-                               status: "md5Check",
-                               md5: val
-                            },
-                            cache: false,
-                            timeout: 1000, //todo 超时的话，只能认为该文件不曾上传过
-                            dataType: "json"
+                            type: "POST"
+                            , url: backEndUrl
+                            , data: {
+                                status: "md5Check"
+                                , md5: val
+                            }
+                            , cache: false
+                            , timeout: 1000 //todo 超时的话，只能认为该文件不曾上传过
+                            , dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
 
                             //console.log(data);
@@ -63,22 +63,22 @@
                         });
                     });
                     return $.when(task);
-                },
-                beforeSend: function(block){
+                }
+                , beforeSend: function(block){
                     //分片验证是否已传过，用于断点续传
                     var task = new $.Deferred();
                     $.ajax({
-                        type: "POST",
-                        url: "whetherBrokeUpload.action",
-                        data: {
-                            status: "chunkCheck",
-                            name: uniqueFileName,
-                            chunkIndex: block.chunk,
-                            size: block.end - block.start
-                        },
-                        cache: false,
-                        timeout: 1000, //todo 超时的话，只能认为该分片未上传过
-                        dataType: "json"
+                        type: "POST"
+                        , url: backEndUrl
+                        , data: {
+                            status: "chunkCheck"
+                            , name: uniqueFileName
+                            , chunkIndex: block.chunk
+                            , size: block.end - block.start
+                        }
+                        , cache: false
+                        , timeout: 1000 //todo 超时的话，只能认为该分片未上传过
+                        , dataType: "json"
                     }).then(function(data, textStatus, jqXHR){
                         if(data.ifExist){   //若存在，返回失败给WebUploader，表明该分块不需要上传
                             task.reject();
@@ -90,9 +90,8 @@
                     });
 
                     return $.when(task);
-                },
-                
-                afterSendFile: function(file){
+                }
+                , afterSendFile: function(file){
                     var chunksTotal = 0;
                     if((chunksTotal = Math.ceil(file.size/chunkSize)) > 1){
                         //合并请求
@@ -106,9 +105,9 @@
                                 , chunks: chunksTotal
                                 , ext: file.ext
                                 , md5: md5Mark
-                            },
-                            cache: false,
-                            dataType: "json"
+                            }
+                            , cache: false
+                            , dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
 
                             //todo 检查响应是否正常
@@ -129,21 +128,21 @@
             });
 
       var uploader = WebUploader.create({
-        swf: "Uploader.swf",
-        server: backEndUrl,
-        pick: "#picker",
-        resize: false,
-        dnd: "#theList",
-        paste: document.body,
-        disableGlobalDnd: true,
-        thumb: {
-          width: 100,
-          height: 100,
-          quality: 70,
-          allowMagnify: true,
-          crop: true
+        swf: "Uploader.swf"
+        , server: backEndUrl
+        , pick: "#picker"
+        , resize: false
+        , dnd: "#theList"
+        , paste: document.body
+        , disableGlobalDnd: true
+        , thumb: {
+          width: 100
+          , height: 100
+          , quality: 70
+          , allowMagnify: true
+          , crop: true
           //, type: "image/jpeg"
-        },
+        }
 //        , compress: {
 //          quality: 90
 //          , allowMagnify: false
@@ -152,15 +151,15 @@
 //          , noCompressIfLarger: true
 //          ,compressSize: 100000
 //        }
-        compress: false,
-        prepareNextFile: true,
-        chunked: true,
-        chunkSize: chunkSize,
-        threads: true,
-        formData: function(){return $.extend(true, {}, userInfo);},
-        fileNumLimit: 1,
-        fileSingleSizeLimit: 1000 * 1024 * 1024,
-        duplicate: true
+                , compress: false
+        , prepareNextFile: true
+        , chunked: true
+        , chunkSize: chunkSize
+        , threads: true
+        , formData: function(){return $.extend(true, {}, userInfo);}
+        , fileNumLimit: 1
+        , fileSingleSizeLimit: 1000 * 1024 * 1024
+        , duplicate: true
       });
 
       uploader.on("fileQueued", function(file){
