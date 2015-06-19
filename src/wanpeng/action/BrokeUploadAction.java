@@ -6,15 +6,24 @@
 package wanpeng.action;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.util.Iterator;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 
-import javax.servlet.http.HttpServletRequest;
-
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.struts2.ServletActionContext;
-import org.springframework.web.multipart.MultipartFile;
 
-import wanpeng.entity.FileInfo;
-import wanpeng.service.impl.webUploaderImpl;
+import wanpeng.entity.UploadFile;
+import wanpeng.tool.UploadUtils;
 
 import com.opensymphony.xwork2.ActionSupport;
 
@@ -25,116 +34,174 @@ import com.opensymphony.xwork2.ActionSupport;
 public class BrokeUploadAction extends ActionSupport {
 
     private static final long serialVersionUID = 1L;
-    private String status;
-    private FileInfo info;
-    private MultipartFile file;
-    private webUploaderImpl wu = new webUploaderImpl();
-    private String uploadFolder;
+    private String md5;
 
-    public String brokeUpload() {
-        HttpServletRequest request = ServletActionContext.getRequest();
-        if (status == null) { // 文件上传
-            if (file != null && !file.isEmpty()) { // 验证请求不会包含数据上传，所以避免NullPoint这里要检查一下file变量是否为null
-                try {
-                    File target = wu.getReadySpace(info, this.uploadFolder); // 为上传的文件准备好对应的位置
-                    if (target == null) {
-                        return "{\"status\": 0, \"message\": \"" + wu.getErrorMsg() + "\"}";
-                    }
-
-                    file.transferTo(target); // 保存上传文件
-
-                    // 将MD5签名和合并后的文件path存入持久层，注意这里这个需求导致需要修改webuploader.js源码3170行
-                    // 因为原始webuploader.js不支持为formData设置函数类型参数，这将导致不能在控件初始化后修改该参数
-                    if (info.getChunks() <= 0) {
-                        if (!wu.saveMd52FileMap(info.getMd5(), target.getName())) {
-                            System.out.println("文件[" + info.getMd5() + "=>" + target.getName()
-                                    + "]保存关系到持久成失败，但并不影响文件上传，只会导致日后该文件可能被重复上传而已");
-                        }
-                    }
-
-                    return "{\"status\": 1, \"path\": \"" + target.getName() + "\"}";
-
+    public void brokeUpload() {
+        UploadFile file = null;
+        try {
+            UploadFile[] files = UploadUtils.handleFileUpload();// 获取的文件
+            System.out.println("rrrrr--" + files[0].getFileSize());
+            OutputStream configOps = null;// 写入文件流
+            Properties partInfo = null;// 创建property
+            partInfo = new Properties();
+            // 把分块的文件key和value写入到property文件中
+            for (int i = 0; i < files.length; i++) {
+                Properties config = new Properties();
+                InputStream ips = null;
+                file = files[i];
+                String path = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + "property";
+                File propFile = new File(path);// 配置文件
+                File tempFile = file.getFile();// 构造临时对象
+                String uploadPath = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator
+                        + "code";
+                // 把临时路径的文件信息写到指定的路径下面
+                InputStream in = new FileInputStream(tempFile);
+                File _file = new File(uploadPath);
+                if (!_file.exists()) {
+                    _file.mkdirs();
                 }
-                catch (IOException ex) {
-                    System.out.println("数据上传失败");
-                    return "{\"status\": 0, \"message\": \"数据上传失败\"}";
+                FileOutputStream out = new FileOutputStream(_file.getAbsolutePath() + File.separator
+                        + tempFile.getName());
+                byte buffer[] = new byte[1024];
+                int len = 0;
+                while ((len = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, len);
+                }
+                out.close();
+                in.close();
+                // 路径是否存在
+                if (!propFile.exists()) {
+                    propFile.mkdirs();
+                    configOps = new FileOutputStream(propFile.getAbsolutePath() + File.separator + "config.properties");
+                    partInfo.setProperty("name", file.getFileName());// 存储源文件名
+                    String targetFilePath = _file.getAbsolutePath() + File.separator + tempFile.getName();
+                    partInfo.setProperty(file.getChunks(), targetFilePath);
+                }
+                else {
+                    ips = new FileInputStream(propFile.getAbsolutePath() + File.separator + "config.properties");
+                    config.load(ips);
+                    Set<Object> keySet = config.keySet();
+                    Iterator<Object> iterString = keySet.iterator();
+                    while (iterString.hasNext()) {
+                        String key = (String) iterString.next();
+                        String value = config.getProperty(key);
+                        partInfo.setProperty(key, value);
+                    }
+                    configOps = new FileOutputStream(propFile.getAbsolutePath() + File.separator + "config.properties");
+                    String targetFilePath = _file.getAbsolutePath() + File.separator + tempFile.getName();
+                    partInfo.setProperty("name", file.getFileName());
+                    partInfo.setProperty(file.getChunks(), targetFilePath);
+                    ips.close();
+                }
+            }
+            partInfo.store(configOps, "sdfetgd");
+            configOps.close();
+        }
+        catch (Exception e) {
+            addActionError("文件上传失败");
+        }
+    }
+
+    /**
+     * 合并上传的文件
+     * 
+     * @throws IOException
+     */
+    public void mergeImage() throws IOException {
+        String path = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + "property"
+                + File.separator + "config.properties";
+        Properties config = new Properties();
+        InputStream ips = null;
+        ips = new FileInputStream(new File(path));
+        config.load(ips);
+        Set<Object> keySet = config.keySet();
+        Set<Integer> intSet = new TreeSet<Integer>();
+        Iterator<Object> iterString = keySet.iterator();
+        while (iterString.hasNext()) {
+            String tempKey = (String) iterString.next();
+            if (!"name".equals(tempKey)) {
+                int tempInt;
+                tempInt = Integer.parseInt(tempKey);
+                intSet.add(tempInt);
+            }
+        }
+        Set<Integer> sortedKeySet = new TreeSet<Integer>();
+        sortedKeySet.addAll(intSet);
+
+        OutputStream eachFileOutput = null;
+        eachFileOutput = new FileOutputStream(new File("F:" + File.separator + "temp1" + File.separator + "target"
+                + File.separator + config.getProperty("name")));
+        Iterator<Integer> iter = sortedKeySet.iterator();
+        while (iter.hasNext()) {
+            String key = new String("" + iter.next());
+            if (!"name".equals(key)) {
+                String fileNumber = null;
+                String filePath = null;
+                fileNumber = key;
+                filePath = config.getProperty(fileNumber);
+
+                InputStream eachFileInput = null;
+                eachFileInput = new FileInputStream(new File(filePath));
+                byte[] buffer = new byte[1024 * 1024 * 1];
+                int len = 0;
+                while ((len = eachFileInput.read(buffer, 0, 1024 * 1024 * 1)) != -1) {
+                    eachFileOutput.write(buffer, 0, len);
+                }
+                eachFileInput.close();
+            }
+        }
+        eachFileOutput.close();
+        ips.close();
+        System.out.println("uploadImage success");
+    }
+
+    /**
+     * 删除文件信息
+     * 
+     * @return
+     */
+    public boolean deleteFile(File dir) {
+        if (dir.isDirectory()) {
+            String[] children = dir.list();
+            for (int i = 0; i < children.length; i++) {
+                boolean success = deleteFile(new File(dir, children[i]));
+                if (!success) {
+                    return false;
                 }
             }
         }
-        else {
-            if (status.equals("md5Check")) { // 秒传验证
+        return dir.delete();
+    }
 
-                String path = wu.md5Check(info.getMd5());
-
-                if (path == null) {
-                    return "{\"ifExist\": 0}";
-                }
-                else {
-                    return "{\"ifExist\": 1, \"path\": \"" + path + "\"}";
-                }
-
+    /**
+     * 检查文件的md5，看看是否和上传路径上面的文件md5值相等
+     * 
+     * @return
+     * @throws Exception
+     */
+    public void checkMD5() throws Exception {
+        if (StringUtils.isNotEmpty(md5)) {
+            String path = "F:/temp1/target/1.jpg";
+            FileInputStream fis = new FileInputStream(path);
+            String md5Value = DigestUtils.md5Hex(IOUtils.toByteArray(fis));
+            IOUtils.closeQuietly(fis);
+            if (md5.equals(md5Value)) {
+                ServletActionContext.getResponse().setContentType("text/html; charset=utf-8");
+                PrintWriter print = ServletActionContext.getResponse().getWriter();
+                print.write("{\"ifExist\": 1, \"path\": \"" + path + "\"}");
+                print.close();
             }
-            else if (status.equals("chunkCheck")) { // 分块验证
+            System.out.println("MD5:" + md5Value);
 
-                // 检查目标分片是否存在且完整
-                if (wu.chunkCheck(this.uploadFolder + "/" + info.getName() + "/" + info.getChunkIndex(),
-                        Long.valueOf(info.getSize()))) {
-                    return "{\"ifExist\": 1}";
-                }
-                else {
-                    return "{\"ifExist\": 0}";
-                }
-
-            }
-            else if (status.equals("chunksMerge")) { // 分块合并
-
-                String path = wu.chunksMerge(info.getName(), info.getExt(), info.getChunks(), info.getMd5(),
-                        this.uploadFolder);
-                if (path == null) {
-                    return "{\"status\": 0, \"message\": \"" + wu.getErrorMsg() + "\"}";
-                }
-
-                return "{\"status\": 1, \"path\": \"" + path + "\", \"message\": \"中文测试\"}";
-            }
         }
-        System.out.println(123);
-        return status;
     }
 
-    public void whetherBrokeUpload() {
-        System.out.println("whetherBrokeUpload");
+    public String getMd5() {
+        return md5;
     }
 
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public FileInfo getInfo() {
-        return info;
-    }
-
-    public void setInfo(FileInfo info) {
-        this.info = info;
-    }
-
-    public MultipartFile getFile() {
-        return file;
-    }
-
-    public void setFile(MultipartFile file) {
-        this.file = file;
-    }
-
-    public String getUploadFolder() {
-        return uploadFolder;
-    }
-
-    public void setUploadFolder(String uploadFolder) {
-        this.uploadFolder = uploadFolder;
+    public void setMd5(String md5) {
+        this.md5 = md5;
     }
 
 }
