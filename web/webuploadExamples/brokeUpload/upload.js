@@ -1,51 +1,36 @@
- var userInfo = {userId:"kazaff", md5:""};   //用户会话信息
-            var chunkSize = 5000 * 1024;        //分块大小
+            var chunkSize = 10 * 1024;        //分块大小
             var uniqueFileName = null;          //文件唯一标识符
             var md5Mark = null;
 
-            function getServer(type){   //测试用，根据不同类型的后端返回对应的请求地址
-                switch(type){
-                    case "php": return "./serverPHP/fileUpload.php"
-                    case "node": return "http://localhost:3000/fileUpload";
-                    case "java": return "http://localhost:8080/fileUpload";
-                    case "dubbo": return "http://127.0.0.1:8888/fileUpload";
-                }
-            }
-
-            var backEndUrl = getServer("dubbo");
-
             WebUploader.Uploader.register({
-                "before-send-file": "beforeSendFile"
-                , "before-send": "beforeSend"
-                , "after-send-file": "afterSendFile"
+                "before-send-file": "beforeSendFile",
+                "before-send": "beforeSend",
+                "after-send-file": "afterSendFile"
             }, {
                 beforeSendFile: function(file){
                     //秒传验证
                     var task = new $.Deferred();
                     var start = new Date().getTime();
-                    (new WebUploader.Uploader()).md5File(file, 0, 10*1024*1024).progress(function(percentage){
-                        console.log(percentage);
+                    (new WebUploader.Uploader()).md5File(file, 0, 10*1024*1024).progress(
+                        function(percentage){
+                          console.log(percentage);
                     }).then(function(val){
                         console.log("总耗时: "+((new Date().getTime()) - start)/1000);
-
+                        
                         md5Mark = val;
-                        userInfo.md5 = val;
 
                         $.ajax({
-                            type: "POST"
-                            , url: backEndUrl
-                            , data: {
-                                status: "md5Check"
-                                , md5: val
-                            }
-                            , cache: false
-                            , timeout: 1000 //todo 超时的话，只能认为该文件不曾上传过
-                            , dataType: "json"
+                            type: "POST",
+                            url: "checkMD5.action",
+                            data: {
+                                status: "md5Check",
+                                md5: val
+                            },
+                            cache: false,
+                            timeout: 1000, //todo 超时的话，只能认为该文件不曾上传过
+                            dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
-
-                            //console.log(data);
-
-                            if(data.ifExist){   //若存在，这返回失败给WebUploader，表明该文件不需要上传
+                            if(data.ifExist){   //若存在，则返回失败给WebUploader，表明该文件不需要上传
                                 task.reject();
 
                                 uploader.skipFile(file);
@@ -54,69 +39,72 @@
                             }else{
                                 task.resolve();
                                 //拿到上传文件的唯一名称，用于断点续传
-                                uniqueFileName = md5(''+userInfo.userId+file.name+file.type+file.lastModifiedDate+file.size);
+                                uniqueFileName = md5(''+file.name+file.type+file.lastModifiedDate+file.size);
                             }
-                        }, function(jqXHR, textStatus, errorThrown){    //任何形式的验证失败，都触发重新上传
-                            task.resolve();
+                        }, 
+                        function(jqXHR, textStatus, errorThrown){    //任何形式的验证失败，都触发重新上传
+                          task.resolve();
                             //拿到上传文件的唯一名称，用于断点续传
-                            uniqueFileName = md5(''+userInfo.userId+file.name+file.type+file.lastModifiedDate+file.size);
+                            uniqueFileName = md5(''+file.name+file.type+file.lastModifiedDate+file.size);
                         });
                     });
                     return $.when(task);
-                }
-                , beforeSend: function(block){
+                },
+                beforeSend: function(file){
                     //分片验证是否已传过，用于断点续传
                     var task = new $.Deferred();
                     $.ajax({
-                        type: "POST"
-                        , url: backEndUrl
-                        , data: {
-                            status: "chunkCheck"
-                            , name: uniqueFileName
-                            , chunkIndex: block.chunk
-                            , size: block.end - block.start
-                        }
-                        , cache: false
-                        , timeout: 1000 //todo 超时的话，只能认为该分片未上传过
-                        , dataType: "json"
+                        type: "POST",
+                        url: "brokeUpload.action",
+                        data: {
+                            status: "chunkCheck",
+                            name: uniqueFileName,
+                            chunkIndex: file.chunk,
+                            size: file.end - file.start,
+                            md5:md5Mark
+                        },
+                        cache: false,
+                        timeout: 1000, //todo 超时的话，只能认为该分片未上传过
+                        dataType: "json"
                     }).then(function(data, textStatus, jqXHR){
                         if(data.ifExist){   //若存在，返回失败给WebUploader，表明该分块不需要上传
                             task.reject();
                         }else{
                             task.resolve();
                         }
-                    }, function(jqXHR, textStatus, errorThrown){    //任何形式的验证失败，都触发重新上传
+                    }, 
+                    function(jqXHR, textStatus, errorThrown){    //任何形式的验证失败，都触发重新上传
                         task.resolve();
                     });
 
                     return $.when(task);
-                }
-                , afterSendFile: function(file){
+                },
+                afterSendFile: function(file){
                     var chunksTotal = 0;
                     if((chunksTotal = Math.ceil(file.size/chunkSize)) > 1){
                         //合并请求
                         var task = new $.Deferred();
                         $.ajax({
-                            type: "POST"
-                            , url: backEndUrl
-                            , data: {
-                                status: "chunksMerge"
-                                , name: uniqueFileName
-                                , chunks: chunksTotal
-                                , ext: file.ext
-                                , md5: md5Mark
-                            }
-                            , cache: false
-                            , dataType: "json"
+                            type: "POST",
+                            url: "mergeImage.action",
+                            data: {
+                                status: "chunksMerge",
+                                name: uniqueFileName,
+                                chunks: chunksTotal,
+                                ext: file.ext,
+                                md5: md5Mark
+                            },
+                            cache: false,
+                            dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
-
                             //todo 检查响应是否正常
 
                             task.resolve();
                             file.path = data.path;
                             UploadComlate(file);
 
-                        }, function(jqXHR, textStatus, errorThrown){
+                        }, 
+                        function(jqXHR, textStatus, errorThrown){
                             task.reject();
                         });
 
@@ -128,38 +116,29 @@
             });
 
       var uploader = WebUploader.create({
-        swf: "Uploader.swf"
-        , server: backEndUrl
-        , pick: "#picker"
-        , resize: false
-        , dnd: "#theList"
-        , paste: document.body
-        , disableGlobalDnd: true
-        , thumb: {
-          width: 100
-          , height: 100
-          , quality: 70
-          , allowMagnify: true
-          , crop: true
-          //, type: "image/jpeg"
-        }
-//        , compress: {
-//          quality: 90
-//          , allowMagnify: false
-//          , crop: false
-//          , preserveHeaders: true
-//          , noCompressIfLarger: true
-//          ,compressSize: 100000
-//        }
-                , compress: false
-        , prepareNextFile: true
-        , chunked: true
-        , chunkSize: chunkSize
-        , threads: true
-        , formData: function(){return $.extend(true, {}, userInfo);}
-        , fileNumLimit: 1
-        , fileSingleSizeLimit: 1000 * 1024 * 1024
-        , duplicate: true
+        swf: "Uploader.swf",
+        server: "brokeUpload.action",
+        pick: "#picker",
+        resize: false,
+        dnd: "#theList",
+        paste: document.body,
+        disableGlobalDnd: true,
+        thumb: {
+          width: 100,
+          height: 100,
+          quality: 70,
+          allowMagnify: true,
+          crop: true
+        },
+        compress: false,
+        prepareNextFile: true,
+        chunked: true,
+        chunkSize: chunkSize,
+        threads: true,
+        formData: function(){return $.extend(true, {});},
+        fileNumLimit: 1,
+        fileSingleSizeLimit: 1000 * 1024 * 1024,
+        duplicate: true
       });
 
       uploader.on("fileQueued", function(file){
