@@ -38,7 +38,9 @@
         </action>
         <action name="brokeUpload" class="wanpeng.action.BrokeUploadAction" method="brokeUpload">
         </action>
-        <action name="whetherBrokeUpload" class="wanpeng.action.BrokeUploadAction" method="whetherBrokeUpload">
+        <action name="mergeImage" class="wanpeng.action.BrokeUploadAction" method="mergeImage">
+        </action>
+        <action name="checkMD5" class="wanpeng.action.BrokeUploadAction" method="checkMD5">
         </action>
     </package>
 
