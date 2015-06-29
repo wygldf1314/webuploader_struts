@@ -39,6 +39,7 @@ public class BrokeUploadAction extends ActionSupport {
     private String chunkIndex;
     private String md5Mark;
     private String fileName;
+    private String uploadFileStatus;// 上传了哪几块文件
 
     /**
      * 这个上传文件的方法是按照 先把文件分成多少块，然后把每一块文件的名字和路径和顺序存放在一个property文件中
@@ -192,7 +193,7 @@ public class BrokeUploadAction extends ActionSupport {
             // 文件夹的路径
             String path = "F:" + "/" + "temp1" + "/" + "target" + "/" + md5;
             File file = new File(path);
-            String[] chunkFileNames = null;
+            String chunkFileNames = "";
             // 文件的路径
             String filePath = "F:" + "/" + "temp1" + "/" + "target" + "/" + fileName;
             String md5Value = null;
@@ -209,10 +210,10 @@ public class BrokeUploadAction extends ActionSupport {
 
             if (file.exists()) {
                 File[] files = file.listFiles();
-                chunkFileNames = new String[files.length];
                 for (int i = 0; i < files.length; i++) {
-                    chunkFileNames[i] = files[i].getName();
+                    chunkFileNames += files[i].getName().substring(0) + ",";
                 }
+                chunkFileNames = chunkFileNames.substring(0, chunkFileNames.lastIndexOf(","));
                 print.write("{\"chunkFileNames\":\"" + chunkFileNames + "\"}");
             }
             print.close();
@@ -264,14 +265,31 @@ public class BrokeUploadAction extends ActionSupport {
                 }
 
                 String tempName = tempFile.getName();// 临时文件的名字
-                FileOutputStream out = new FileOutputStream(_file.getAbsolutePath() + File.separator + file.getChunks()
-                        + tempName.substring(tempName.lastIndexOf(".")));
-                byte buffer[] = new byte[1024];
-                int len = 0;
-                while ((len = in.read(buffer)) > 0) {
-                    out.write(buffer, 0, len);
+                String newFileName = file.getChunks() + tempName.substring(tempName.lastIndexOf("."));
+                FileOutputStream out = null;
+                // 如果临时路径下面有上传的文件块，则直接跳过，如果没有则保存到临时路径下面
+                if (StringUtils.isNotEmpty(uploadFileStatus)) {
+                    if (!uploadFileStatus.contains(newFileName)) {
+                        out = new FileOutputStream(_file.getAbsolutePath() + File.separator + newFileName);
+                        byte buffer[] = new byte[1024];
+                        int len = 0;
+                        while ((len = in.read(buffer)) > 0) {
+                            out.write(buffer, 0, len);
+                        }
+                    }
                 }
-                out.close();
+                else {
+                    out = new FileOutputStream(_file.getAbsolutePath() + File.separator + newFileName);
+                    byte buffer[] = new byte[1024];
+                    int len = 0;
+                    while ((len = in.read(buffer)) > 0) {
+                        out.write(buffer, 0, len);
+                    }
+                }
+                // 输出流不为空的时候关掉
+                if (out != null) {
+                    out.close();
+                }
                 in.close();
             }
         }
@@ -286,12 +304,14 @@ public class BrokeUploadAction extends ActionSupport {
      * @throws IOException
      */
     public void mergeFileByMd5() throws IOException {
+        // 上传文件的临时路径
         String uploadPath = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + md5;
         File file = new File(uploadPath);
         File[] files = file.listFiles();
         OutputStream eachFileOutput = null;
         eachFileOutput = new FileOutputStream(new File("F:" + File.separator + "temp1" + File.separator + "target"
                 + File.separator + fileName));
+        // 合并临时路径下面的临时文件
         for (File _file : files) {
             String fileName = _file.getAbsolutePath();
             InputStream eachFileInput = null;
@@ -345,6 +365,14 @@ public class BrokeUploadAction extends ActionSupport {
 
     public void setFileName(String fileName) {
         this.fileName = fileName;
+    }
+
+    public String getUploadFileStatus() {
+        return uploadFileStatus;
+    }
+
+    public void setUploadFileStatus(String uploadFileStatus) {
+        this.uploadFileStatus = uploadFileStatus;
     }
 
 }

@@ -1,7 +1,6 @@
-            var chunkSize = 10 * 1024;        //分块大小
-            var uniqueFileName = null;          //文件唯一标识符
+            var chunkSize = 5 * 1024 * 1024;        //分块大小
             var md5Mark = null;
-            var itemsStatus = {};
+            var itemsStatus = new Array();
 
             WebUploader.Uploader.register({
                 "before-send-file": "beforeSendFile",
@@ -17,7 +16,6 @@
                           console.log(percentage);
                     }).then(function(val){
                         console.log("总耗时: "+((new Date().getTime()) - start)/1000);
-                        
                         md5Mark = val;
                         $.ajax({
                             type: "POST",
@@ -32,10 +30,13 @@
                             timeout: 1000, //todo 超时的话，只能认为该文件不曾上传过
                             dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
-                            
-                            if(data.ifExist){   //若存在，则返回失败给WebUploader，表明该文件不需要上传
+                            if(data.ifExist){  
+                              //若存在，则返回失败给WebUploader，表明该文件不需要上传
                                 task.reject();
-
+                                if(confirm("当前文件已经存在，确定要覆盖当前文件？")) {
+                                }else{
+                                  return;
+                                }
                                 uploader.skipFile(file);
                                 file.path = data.path;
                                 UploadComlate(file);
@@ -43,14 +44,10 @@
                             }else{
                                 task.resolve();
                                 itemsStatus = data.chunkFileNames;
-                                //拿到上传文件的唯一名称，用于断点续传
-                                uniqueFileName = md5(''+file.name+file.type+file.lastModifiedDate+file.size);
                             }
                         }, 
                         function(jqXHR, textStatus, errorThrown){//任何形式的验证失败，都触发重新上传
                           task.resolve();
-                            //拿到上传文件的唯一名称，用于断点续传
-                            uniqueFileName = md5(''+file.name+file.type+file.lastModifiedDate+file.size);
                         });
                     });
                     return $.when(task);
@@ -58,9 +55,8 @@
                 beforeSend: function(file){
                     //分片验证是否已传过，用于断点续传
                     var task = new $.Deferred();
-                    
-                    
-                    if(itemsStatus[file.index] == 1){   //若存在，返回失败给WebUploader，表明该分块不需要上传
+
+                    if(itemsStatus.indexOf(""+file.chunk) != -1){   //若存在，返回失败给WebUploader，表明该分块不需要上传
                         task.reject();
                     }else{
                         task.resolve();
@@ -70,7 +66,7 @@
                 },
                 afterSendFile: function(file){
                     var chunksTotal = 0;
-                    if((chunksTotal = Math.ceil(file.size/chunkSize)) > 1){
+                    if((chunksTotal = Math.ceil(file.size/chunkSize)) >= 1){
                         //合并请求
                         var task = new $.Deferred();
                         $.ajax({
@@ -78,7 +74,6 @@
                             url: "mergeFileByMd5.action",
                             data: {
                                 status: "chunksMerge",
-                                name: uniqueFileName,
                                 chunks: chunksTotal,
                                 ext: file.ext,
                                 md5: md5Mark,
@@ -125,13 +120,14 @@
         chunked: true,
         chunkSize: chunkSize,
         threads: true,
-        formData: function(){return $.extend(true, {});},
         fileNumLimit: 1,
         fileSingleSizeLimit: 20 * 1000 * 1024 * 1024,
         duplicate: true
       });
       
       uploader.on('uploadBeforeSend', function(object,data,headers) {
+        data.chunk = object.chunk;
+        data.uploadFileStatus = itemsStatus;
         data.md5 = md5Mark;
       });
         
@@ -184,7 +180,7 @@
 
       function UploadComlate(file){
           console.log(file);
-
+          
           $("#" + file.id + " .percentage").text("上传完毕");
           $(".itemStop").hide();
           $(".itemUpload").hide();
