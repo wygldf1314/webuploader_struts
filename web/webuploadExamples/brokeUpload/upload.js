@@ -1,6 +1,8 @@
-            var chunkSize = 5 * 1024 * 1024;        //分块大小
+            var chunkSize = 10 * 1024;        //分块大小
             var md5Mark = null;
             var itemsStatus = new Array();
+            var progress = $("#uploader").find( '.statusBar' ).find(".progress");
+            var statusBar = $("#uploader").find( '.statusBar' );
 
             WebUploader.Uploader.register({
                 "before-send-file": "beforeSendFile",
@@ -11,7 +13,7 @@
                     //秒传验证
                     var task = new $.Deferred();
                     var start = new Date().getTime();
-                    (new WebUploader.Uploader()).md5File(file, 0, 10*1024*1024).progress(
+                    (new WebUploader.Uploader()).md5File(file, 0, 200*1024*1024).progress(
                         function(percentage){
                           console.log(percentage);
                     }).then(function(val){
@@ -83,7 +85,6 @@
                             dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
                             //todo 检查响应是否正常
-
                             task.resolve();
                             file.path = data.path;
                             UploadComlate(file);
@@ -175,13 +176,15 @@
       });
       
       uploader.on("uploadProgress", function(file, percentage){
-        $("#" + file.id + " .percentage").text(percentage * 100 + "%");
+        statusBar.show();
+        progress.find(".text").text(Math.round( percentage * 100 ) + "%");
+        progress.find(".percentage").css('width',Math.round( percentage * 100 ) + "%");
       });
 
       function UploadComlate(file){
           console.log(file);
-          
-          $("#" + file.id + " .percentage").text("上传完毕");
+          statusBar.show();
+          $("#uploader").find( '.statusBar' ).find(".progress").find(".text").text("上传完毕");
           $(".itemStop").hide();
           $(".itemUpload").hide();
           $(".itemDel").hide();
