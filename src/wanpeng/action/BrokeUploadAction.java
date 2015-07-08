@@ -5,20 +5,21 @@
  */
 package wanpeng.action;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.util.Iterator;
-import java.util.Properties;
-import java.util.Set;
-import java.util.TreeSet;
+import java.io.RandomAccessFile;
+import java.security.MessageDigest;
 
-import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.commons.io.IOUtils;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.struts2.ServletActionContext;
 
@@ -40,129 +41,6 @@ public class BrokeUploadAction extends ActionSupport {
     private String md5Mark;
     private String fileName;
     private String uploadFileStatus;// 上传了哪几块文件
-
-    /**
-     * 这个上传文件的方法是按照 先把文件分成多少块，然后把每一块文件的名字和路径和顺序存放在一个property文件中
-     * 
-     */
-    public void brokeUpload() {
-        UploadFile file = null;
-        try {
-            UploadFile[] files = UploadUtils.handleFileUpload();// 获取的文件
-            // System.out.println("rrrrr--" + files[0].getFileSize());
-            OutputStream configOps = null;// 写入文件流
-            Properties partInfo = null;// 创建property
-            partInfo = new Properties();
-            // 把分块的文件key和value写入到property文件中
-            for (int i = 0; i < files.length; i++) {
-                Properties config = new Properties();
-                InputStream ips = null;
-                file = files[i];
-                String path = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + "property";
-                File propFile = new File(path);// 配置文件
-                File tempFile = file.getFile();// 构造临时对象
-                String uploadPath = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator
-                        + "code";
-                // 把临时路径的文件信息写到指定的路径下面
-                InputStream in = new FileInputStream(tempFile);
-                File _file = new File(uploadPath);
-                if (!_file.exists()) {
-                    _file.mkdirs();
-                }
-                FileOutputStream out = new FileOutputStream(_file.getAbsolutePath() + File.separator
-                        + tempFile.getName());
-                byte buffer[] = new byte[1024];
-                int len = 0;
-                while ((len = in.read(buffer)) > 0) {
-                    out.write(buffer, 0, len);
-                }
-                out.close();
-                in.close();
-                // 路径是否存在
-                if (!propFile.exists()) {
-                    propFile.mkdirs();
-                    configOps = new FileOutputStream(propFile.getAbsolutePath() + File.separator + "config.properties");
-                    partInfo.setProperty("name", file.getFileName());// 存储源文件名
-                    String targetFilePath = _file.getAbsolutePath() + File.separator + tempFile.getName();
-                    partInfo.setProperty(file.getChunks(), targetFilePath);
-                }
-                else {
-                    ips = new FileInputStream(propFile.getAbsolutePath() + File.separator + "config.properties");
-                    config.load(ips);
-                    Set<Object> keySet = config.keySet();
-                    Iterator<Object> iterString = keySet.iterator();
-                    while (iterString.hasNext()) {
-                        String key = (String) iterString.next();
-                        String value = config.getProperty(key);
-                        partInfo.setProperty(key, value);
-                    }
-                    configOps = new FileOutputStream(propFile.getAbsolutePath() + File.separator + "config.properties");
-                    String targetFilePath = _file.getAbsolutePath() + File.separator + tempFile.getName();
-                    partInfo.setProperty("name", file.getFileName());
-                    partInfo.setProperty(file.getChunks(), targetFilePath);
-                    ips.close();
-                }
-            }
-            partInfo.store(configOps, "sdfetgd");
-            configOps.close();
-        }
-        catch (Exception e) {
-            addActionError("文件上传失败");
-        }
-    }
-
-    /**
-     * 根据property中的key和value对文件进行合并
-     * 
-     * @throws IOException
-     */
-    public void mergeImage() throws IOException {
-        String path = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + "property"
-                + File.separator + "config.properties";
-        Properties config = new Properties();
-        InputStream ips = null;
-        ips = new FileInputStream(new File(path));
-        config.load(ips);
-        Set<Object> keySet = config.keySet();
-        Set<Integer> intSet = new TreeSet<Integer>();
-        Iterator<Object> iterString = keySet.iterator();
-        while (iterString.hasNext()) {
-            String tempKey = (String) iterString.next();
-            if (!"name".equals(tempKey)) {
-                int tempInt;
-                tempInt = Integer.parseInt(tempKey);
-                intSet.add(tempInt);
-            }
-        }
-        Set<Integer> sortedKeySet = new TreeSet<Integer>();
-        sortedKeySet.addAll(intSet);
-
-        OutputStream eachFileOutput = null;
-        eachFileOutput = new FileOutputStream(new File("F:" + File.separator + "temp1" + File.separator + "target"
-                + File.separator + config.getProperty("name")));
-        Iterator<Integer> iter = sortedKeySet.iterator();
-        while (iter.hasNext()) {
-            String key = new String("" + iter.next());
-            if (!"name".equals(key)) {
-                String fileNumber = null;
-                String filePath = null;
-                fileNumber = key;
-                filePath = config.getProperty(fileNumber);
-
-                InputStream eachFileInput = null;
-                eachFileInput = new FileInputStream(new File(filePath));
-                byte[] buffer = new byte[1024 * 1024 * 1];
-                int len = 0;
-                while ((len = eachFileInput.read(buffer, 0, 1024 * 1024 * 1)) != -1) {
-                    eachFileOutput.write(buffer, 0, len);
-                }
-                eachFileInput.close();
-            }
-        }
-        eachFileOutput.close();
-        ips.close();
-        System.out.println("uploadImage success");
-    }
 
     /**
      * 删除文件信息
@@ -190,36 +68,62 @@ public class BrokeUploadAction extends ActionSupport {
      */
     public void checkMD5() throws Exception {
         if (StringUtils.isNotEmpty(md5)) {
-            // 文件夹的路径
-            String path = "F:" + "/" + "temp1" + "/" + "target" + "/" + md5;
+            // 存放分了多少块的文件的路径
+            String path = "F:" + "/" + "temp1" + "/" + "target" + "/" + md5 + File.separator
+                    + fileName.substring(0, fileName.lastIndexOf(".")) + ".txt";
             File file = new File(path);
-            String chunkFileNames = "";
             // 文件的路径
-            String filePath = "F:" + "/" + "temp1" + "/" + "target" + "/" + fileName;
+            String filePath = "F:" + "/" + "temp1" + "/" + "target" + "/" + md5 + "/" + fileName;
             String md5Value = null;
             ServletActionContext.getResponse().setContentType("text/html; charset=utf-8");
             PrintWriter print = ServletActionContext.getResponse().getWriter();
             if (new File(filePath).exists()) {
-                FileInputStream fis = new FileInputStream(filePath);
-                md5Value = DigestUtils.md5Hex(IOUtils.toByteArray(fis));
-                IOUtils.closeQuietly(fis);
+                MessageDigest MD5 = MessageDigest.getInstance("MD5");
+                FileInputStream fileInputStream = null;
+                try {
+                    fileInputStream = new FileInputStream(new File(filePath));
+                    byte[] buffer = new byte[1024 * 1024 * 1];
+                    int length;
+                    while ((length = fileInputStream.read(buffer)) != -1) {
+                        MD5.update(buffer, 0, length);
+                        break;
+                    }
+                    md5Value = new String(Hex.encodeHex(MD5.digest()));
+                }
+                catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
+                finally {
+                    try {
+                        if (fileInputStream != null) {
+                            fileInputStream.close();
+                        }
+                    }
+                    catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
                 if (md5.equals(md5Value)) {
                     print.write("{\"ifExist\": 1, \"path\": \"" + filePath + "\"}");
                 }
             }
 
             if (file.exists()) {
-                File[] files = file.listFiles();
-                for (int i = 0; i < files.length; i++) {
-                    chunkFileNames += files[i].getName().substring(0) + ",";
+                FileReader fileReader = new FileReader(file);
+                BufferedReader bf = new BufferedReader(fileReader);
+                String _str;
+                String str = "";
+                while ((_str = bf.readLine()) != null) {
+                    str = str + _str;
                 }
-                chunkFileNames = chunkFileNames.substring(0, chunkFileNames.lastIndexOf(","));
-                print.write("{\"chunkFileNames\":\"" + chunkFileNames + "\"}");
+                fileReader.close();
+                bf.close();
+                print.write("{\"chunkFileNames\":\"" + str + "\"}");
             }
             print.close();
-            System.out.println("MD5:" + md5Value);
-            System.out.println("web uploaderMD5:" + md5);
-
         }
     }
 
@@ -256,41 +160,35 @@ public class BrokeUploadAction extends ActionSupport {
             for (int i = 0; i < files.length; i++) {
                 file = files[i];
                 File tempFile = file.getFile();// 构造临时对象
-                String uploadPath = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + md5;
-                // 把临时路径的文件信息写到指定的路径下面
-                InputStream in = new FileInputStream(tempFile);
-                File _file = new File(uploadPath);
-                if (!_file.exists()) {
-                    _file.mkdirs();
+                File formalFile = new File("F:" + File.separator + "temp1" + File.separator + "target" + File.separator
+                        + md5 + File.separator + file.getFileName());
+                if (!formalFile.exists()) {
+                    formalFile.mkdir();
+                }
+                String logName = file.getFileName().substring(0, file.getFileName().lastIndexOf("."));
+                File logFile = new File("F:" + File.separator + "temp1" + File.separator + "target" + File.separator
+                        + md5);
+                if (!logFile.exists()) {
+                    logFile.mkdirs();
                 }
 
-                String tempName = tempFile.getName();// 临时文件的名字
-                String newFileName = file.getChunks() + tempName.substring(tempName.lastIndexOf("."));
-                FileOutputStream out = null;
-                // 如果临时路径下面有上传的文件块，则直接跳过，如果没有则保存到临时路径下面
-                if (StringUtils.isNotEmpty(uploadFileStatus)) {
-                    if (!uploadFileStatus.contains(newFileName)) {
-                        out = new FileOutputStream(_file.getAbsolutePath() + File.separator + newFileName);
-                        byte buffer[] = new byte[1024];
-                        int len = 0;
-                        while ((len = in.read(buffer)) > 0) {
-                            out.write(buffer, 0, len);
-                        }
-                    }
+                FileWriter fileWrite = new FileWriter(logFile.getAbsolutePath() + File.separator + logName + ".txt");
+                fileWrite.write(file.getChunks());
+                fileWrite.close();
+                // 打开一个随机访问文件流，按读写方式
+                RandomAccessFile randomFile = new RandomAccessFile(formalFile, "rw");
+                // 文件长度，字节数
+                long fileLength = randomFile.length();
+                // 将写文件指针移到文件尾。
+                randomFile.seek(fileLength);
+                InputStream eachFileInput = new FileInputStream(tempFile);
+                byte[] buffer = new byte[1024 * 1024 * 1];
+                int len = 0;
+                while ((len = eachFileInput.read(buffer, 0, 1024 * 1024 * 1)) != -1) {
+                    randomFile.write(buffer, 0, len);
                 }
-                else {
-                    out = new FileOutputStream(_file.getAbsolutePath() + File.separator + newFileName);
-                    byte buffer[] = new byte[1024];
-                    int len = 0;
-                    while ((len = in.read(buffer)) > 0) {
-                        out.write(buffer, 0, len);
-                    }
-                }
-                // 输出流不为空的时候关掉
-                if (out != null) {
-                    out.close();
-                }
-                in.close();
+                eachFileInput.close();
+                randomFile.close();
             }
         }
         catch (Exception e) {
@@ -312,8 +210,8 @@ public class BrokeUploadAction extends ActionSupport {
         eachFileOutput = new FileOutputStream(new File("F:" + File.separator + "temp1" + File.separator + "target"
                 + File.separator + fileName));
         // 合并临时路径下面的临时文件
-        for (File _file : files) {
-            String fileName = _file.getAbsolutePath();
+        for (int i = 0; i < files.length; i++) {
+            String fileName = uploadPath + File.separator + i + ".tmp";
             InputStream eachFileInput = null;
             eachFileInput = new FileInputStream(new File(fileName));
             byte[] buffer = new byte[1024 * 1024 * 1];
@@ -325,6 +223,19 @@ public class BrokeUploadAction extends ActionSupport {
         }
         eachFileOutput.close();
         deleteFile(file);
+        String tempFile = "F:" + "/" + "temp1" + "/" + "target" + "/" + fileName;
+        ServletActionContext.getResponse().setContentType("text/html; charset=utf-8");
+        PrintWriter print = ServletActionContext.getResponse().getWriter();
+        print.write("{\"ifExist\": 1, \"path\": \"" + tempFile + "\"}");
+    }
+
+    /**
+     * 删除临时文件
+     */
+    public void deleteTxtFile() {
+        String textName = "F:" + File.separator + "temp1" + File.separator + "target" + File.separator + md5
+                + File.separator + fileName.substring(0, fileName.lastIndexOf(".")) + ".txt";
+        deleteFile(new File(textName));
     }
 
     public String getMd5() {
