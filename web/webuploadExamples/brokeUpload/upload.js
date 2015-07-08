@@ -1,8 +1,14 @@
             var chunkSize = 10 * 1024;        //分块大小
             var md5Mark = null;
-            var itemsStatus = new Array();
+            var itemsStatus = null;
             var progress = $("#uploader").find( '.statusBar' ).find(".progress");
             var statusBar = $("#uploader").find( '.statusBar' );
+             // 优化retina, 在retina下这个值是2
+            var ratio = window.devicePixelRatio || 1;
+
+            // 缩略图大小
+            var thumbnailWidth = 110 * ratio;
+            var thumbnailHeight = 110 * ratio;
 
             WebUploader.Uploader.register({
                 "before-send-file": "beforeSendFile",
@@ -13,7 +19,7 @@
                     //秒传验证
                     var task = new $.Deferred();
                     var start = new Date().getTime();
-                    (new WebUploader.Uploader()).md5File(file, 0, 200*1024*1024).progress(
+                    (new WebUploader.Uploader()).md5File(file, 0, 1 * 1024 * 1024).progress(
                         function(percentage){
                           console.log(percentage);
                     }).then(function(val){
@@ -32,6 +38,7 @@
                             timeout: 1000, //todo 超时的话，只能认为该文件不曾上传过
                             dataType: "json"
                         }).then(function(data, textStatus, jqXHR){
+                          
                             if(data.ifExist){  
                               //若存在，则返回失败给WebUploader，表明该文件不需要上传
                                 task.reject();
@@ -57,8 +64,7 @@
                 beforeSend: function(file){
                     //分片验证是否已传过，用于断点续传
                     var task = new $.Deferred();
-
-                    if(itemsStatus.indexOf(""+file.chunk) != -1){   //若存在，返回失败给WebUploader，表明该分块不需要上传
+                    if(itemsStatus != null && file.chunk <= parseInt(itemsStatus)){   //若存在，返回失败给WebUploader，表明该分块不需要上传
                         task.reject();
                     }else{
                         task.resolve();
@@ -73,7 +79,7 @@
                         var task = new $.Deferred();
                         $.ajax({
                             type: "POST",
-                            url: "mergeFileByMd5.action",
+                            url: "",
                             data: {
                                 status: "chunksMerge",
                                 chunks: chunksTotal,
@@ -106,6 +112,7 @@
         server: "uploadFileByMd5.action",
         pick: "#picker",
         resize: false,
+        threads: 1,
         dnd: "#theList",
         paste: document.body,
         disableGlobalDnd: true,
@@ -120,9 +127,8 @@
         prepareNextFile: true,
         chunked: true,
         chunkSize: chunkSize,
-        threads: true,
         fileNumLimit: 1,
-        fileSingleSizeLimit: 20 * 1000 * 1024 * 1024,
+        fileSingleSizeLimit: 20 * 1024 * 1024 * 1024,
         duplicate: true
       });
       
@@ -137,21 +143,25 @@
           md5Mark = val;
         });
         $("#theList").append('<li id="'+file.id+'">' +
-          '<img /><span>'+file.name+'</span><span class="itemUpload">上传</span><span class="itemStop">暂停</span><span class="itemDel">删除</span>' +
-          '<div class="percentage"></div>' +
+          '<span class="imgWrap"><img/></span>'+
+          '<span>'+file.name+'</span>'+
+          '<span class="itemUpload">上传</span>'+
+          '<span class="itemStop">暂停</span>'+
+          '<span class="itemDel">删除</span>' +
         '</li>');
         
         var $img = $("#" + file.id).find("img");
-        
-        uploader.makeThumb(file, function(error, src){
-          if(error){
-            $img.replaceWith("<span>不能预览</span>");
-          }
+        var $wrap = $("#" + file.id).find('span.imgWrap');
 
-          $img.attr("src", src);
+        uploader.makeThumb(file, function(error, src){
+            if(error){
+              $wrap.text( '不能预览' );
+            }
+  
+            $img.attr("src", src);
         });
         
-      });
+        });
       
       $("#theList").on("click", ".itemUpload", function(){
           uploader.upload();
@@ -179,6 +189,25 @@
         statusBar.show();
         progress.find(".text").text(Math.round( percentage * 100 ) + "%");
         progress.find(".percentage").css('width',Math.round( percentage * 100 ) + "%");
+      });
+      
+      uploader.onError = function( code ) {
+        alert( code );
+      };
+      
+      
+      uploader.on("uploadComplete",function(file) {
+          UploadComlate(file);
+          $.ajax({
+            type: "POST",
+            url: "deleteTxtFile.action",
+            data: {
+                md5: md5Mark,
+                fileName: file.name
+            },
+            cache: false,
+            dataType: "json"
+        })
       });
 
       function UploadComlate(file){
